@@ -61,9 +61,9 @@
                 interpretationTextP.textContent = interpretation;
                 resultCard.classList.remove('hidden');
             } catch (error) {
-                console.error("解籤時發生錯誤:", error);
-                interpretationTextP.textContent = "與菩薩的連結似乎有些不穩定，請靜心後再試一次。\n錯誤訊息：" + error.message;
-                poemTextP.textContent = "心誠則靈";
+                console.error("顯示錯誤:", error);
+                interpretationTextP.textContent = "與菩薩的連結似乎有些不穩定，請靜心後再試一次。\n\n詳細錯誤訊息：\n" + error.message;
+                poemTextP.textContent = "心誠\n則靈";
                 lotNumberSpan.textContent = '??';
                 resultCard.classList.remove('hidden');
             } finally {
@@ -81,28 +81,37 @@
                 if (poemMatch && poemMatch[1]) poem = poemMatch[1].trim();
                 if (interpretationMatch && interpretationMatch[1]) interpretation = interpretationMatch[1].trim();
             } catch(e) {
-                console.error("解析 AI 回應失敗:", e);
                 interpretation = text;
             }
             return { poem, interpretation };
         }
         async function generateAIPoem(number) {
-            const functionUrl = '/.netlify/functions/generate-poem';
-            const response = await fetch(functionUrl, {
-                method: 'POST',
-                body: JSON.stringify({ lotNumber: number }), 
-            });
-            if (!response.ok) { throw new Error(`呼叫後端失敗，狀態碼: ${response.status}`); }
-            const result = await response.json();
-            if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
-                return result.candidates[0].content.parts[0].text;
-            } else {
-                console.error("從後端收到無效的回應", result);
-                throw new Error("後端未能提供有效的籤詩內容。");
+            const functionUrl = '/.netlify/functions/get-poem';
+            try {
+                const response = await fetch(functionUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({ lotNumber: number }), 
+                });
+                if (!response.ok) {
+                    let errorDetails = `狀態碼: ${response.status} (${response.statusText})`;
+                    try {
+                        const errorData = await response.json();
+                        if (errorData.error) errorDetails += ` - ${errorData.error}`;
+                    } catch (e) { /* Not a JSON error, do nothing */ }
+                    throw new Error(`呼叫後端失敗，${errorDetails}`);
+                }
+                const result = await response.json();
+                if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    if (result.error) throw new Error(`AI 服務傳回錯誤: ${result.error.message}`);
+                    throw new Error("後端未能提供有效的籤詩內容。");
+                }
+            } catch (networkError) {
+                throw new Error(`網路連線錯誤，無法聯繫後端服務。(${networkError.message})`);
             }
         }
     </script>
 </body>
 </html>
-<!-- v2 -->
 

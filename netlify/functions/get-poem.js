@@ -1,68 +1,63 @@
 // 檔案路徑: netlify/functions/get-poem.js
-// 這是經過強化的後端函式
 
 exports.handler = async (event) => {
-  console.log("Function 'get-poem' has been triggered.");
+    try {
+        const lotNumber = Math.floor(Math.random() * 100) + 1; // 產生 1-100 的隨機數
 
-  // 只接受 POST 請求
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
+        const apiKey = process.env.GOOGLE_API_KEY;
+        if (!apiKey) {
+            console.error("FATAL: GOOGLE_API_KEY is not set.");
+            return { statusCode: 500, body: JSON.stringify({ error: "伺服器金鑰設定遺失。" }) };
+        }
+        
+        const prompt = `
+            你是一位充滿智慧與慈悲的觀音菩薩廟宇裡的解籤師。
+            一位信眾剛剛抽到了觀音靈籤第 ${lotNumber} 號籤。
+            請為這支籤生成一首最具代表性的七言絕句籤詩，並附上簡短的白話文解說。
 
-  // 檢查 API 金鑰是否存在
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    console.error("FATAL: GOOGLE_API_KEY environment variable not set on Netlify.");
-    return { statusCode: 500, body: JSON.stringify({ error: "伺服器端金鑰設定遺失。" }) };
-  }
+            你的回覆必須嚴格遵循以下格式，不得有任何多餘的文字：
+            籤詩：
+            [這裡填寫四句七言詩，每句一行]
+            解曰：
+            [這裡填寫對籤詩的白話文總體解釋]
+        `;
 
-  // 解析從前端傳來的籤號
-  let lotNumber;
-  try {
-    const body = JSON.parse(event.body);
-    lotNumber = body.lotNumber;
-    if (!lotNumber) throw new Error("Request body is missing 'lotNumber'.");
-    console.log(`Received request for lot number: ${lotNumber}`);
-  } catch (e) {
-    console.error("Could not parse request body:", e);
-    return { statusCode: 400, body: JSON.stringify({ error: "請求的資料格式錯誤。" }) };
-  }
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const aiResponse = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] }),
+        });
 
-  const prompt = `
-    你是一位充滿智慧與慈悲的觀音菩薩廟宇裡的解籤師。
-    使用者剛剛抽到了第 ${lotNumber} 號籤。
-    請根據這個籤號，為使用者生成一首充滿禪意與指引的七言絕句籤詩，並附上白話文解說。
-    你的回覆必須嚴格遵循以下格式，不得有任何多餘的文字：
-    籤詩：
-    [這裡填寫四句七言詩，每句一行]
-    解曰：
-    [這裡填寫對籤詩的白話文解釋，內容需溫和、正面，給予使用者希望與方向]
-  `;
+        if (!aiResponse.ok) {
+            throw new Error(`AI 服務呼叫失敗`);
+        }
+        
+        const aiData = await aiResponse.json();
+        const rawText = aiData.candidates[0].content.parts[0].text;
+        
+        // 解析籤詩與解說
+        let poem = "天意難測，請再試一次。";
+        let interpretation = "未能順利取得解說。";
+        const poemMatch = rawText.match(/籤詩：([\s\S]*?)解曰：/);
+        const interpretationMatch = rawText.match(/解曰：([\s\S]*)/);
+        if (poemMatch && poemMatch[1]) poem = poemMatch[1].trim();
+        if (interpretationMatch && interpretationMatch[1]) interpretation = interpretationMatch[1].trim();
 
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                lotNumber,
+                poem,
+                interpretation
+            }),
+        };
 
-  try {
-    console.log("Attempting to call Google AI API...");
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] }),
-    });
-    console.log(`Google AI API response status: ${response.status}`);
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("Google AI API error:", errorBody);
-      throw new Error(`Google AI API 請求失敗`);
+    } catch (error) {
+        console.error("Get poem function error:", error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: error.message || "伺服器內部錯誤" }),
+        };
     }
-
-    const data = await response.json();
-    console.log("Successfully received data from Google AI.");
-
-    return { statusCode: 200, body: JSON.stringify(data) };
-  } catch (error) {
-    console.error("Error during API call to Google:", error);
-    return { statusCode: 502, body: JSON.stringify({ error: error.message }) };
-  }
 };
-

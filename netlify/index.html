@@ -32,7 +32,6 @@
                 <div id="draw-section"><button id="drawButton" class="btn-draw font-bold py-3 px-8 rounded-full text-xl shadow-lg focus:outline-none focus:ring-4 focus:ring-pink-300">祈求靈籤</button></div>
                 <div id="loadingIndicator" class="hidden my-8 flex flex-col items-center justify-center"><div class="loader"></div><p class="mt-4 text-gray-600">正在與觀音菩薩溝通，請稍候...</p></div>
                 
-                <!-- 籤詩結果區 -->
                 <div id="resultCard" class="hidden mt-6 p-6 border-2 border-gray-200 rounded-lg bg-white/50 text-left">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div class="poem-container text-center md:col-span-1 flex flex-col items-center">
@@ -45,7 +44,6 @@
                         </div>
                     </div>
                     
-                    <!-- 詳解功能區 (新功能) -->
                     <div id="detailed-section" class="mt-8 pt-6 border-t border-gray-300">
                         <h3 class="text-xl font-semibold mb-4 text-center">針對特定問題詳解</h3>
                         <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -65,15 +63,12 @@
         </div>
     </div>
     <script type="module">
-        // --- 獲取所有需要的 DOM 元素 ---
         const drawButton = document.getElementById('drawButton');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const resultCard = document.getElementById('resultCard');
         const lotNumberSpan = document.getElementById('lotNumber');
         const poemTextP = document.getElementById('poemText');
         const interpretationTextP = document.getElementById('interpretationText');
-        
-        // 新增功能的元素
         const detailedSection = document.getElementById('detailed-section');
         const userQueryInput = document.getElementById('userQueryInput');
         const detailedButton = document.getElementById('detailedButton');
@@ -81,43 +76,43 @@
         const detailedResult = document.getElementById('detailedResult');
         const detailedInterpretationText = document.getElementById('detailedInterpretationText');
 
-        // --- 事件監聽 ---
         drawButton.addEventListener('click', handleDraw);
         detailedButton.addEventListener('click', handleDetailedInterpretation);
 
-        // --- 主要功能函式 ---
         async function handleDraw() {
-            // ... (此處省略與之前版本相同的 UI 準備程式碼)
             drawButton.disabled = true;
             drawButton.textContent = '誠心祈求中...';
             resultCard.classList.add('hidden');
-            detailedSection.classList.add('hidden'); // 隱藏詳解區
-            detailedResult.classList.add('hidden'); // 隱藏舊的詳解結果
-            userQueryInput.value = ''; // 清空輸入框
+            detailedResult.classList.add('hidden');
+            userQueryInput.value = '';
             loadingIndicator.classList.remove('hidden');
 
             try {
-                // 改為呼叫 get-poem 後端函式
+                // 呼叫後端函式
                 const response = await fetch('/.netlify/functions/get-poem');
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `伺服器錯誤，狀態碼: ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`伺服器回應錯誤: ${response.status} - ${errorText}`);
                 }
-                const result = await response.json();
                 
+                // *** 這裡是本次最重要的修正 ***
+                // 我們現在直接使用後端整理好的資料，而不是自己解析
+                const result = await response.json();
+
                 // 更新 UI
                 lotNumberSpan.textContent = result.lotNumber;
                 poemTextP.textContent = result.poem;
                 interpretationTextP.textContent = result.interpretation;
                 
                 resultCard.classList.remove('hidden');
-                detailedSection.classList.remove('hidden'); // 顯示詳解區
+                detailedSection.classList.remove('hidden');
 
             } catch (error) {
                 console.error("求籤時發生錯誤:", error);
                 interpretationTextP.textContent = "與菩薩的連結似乎有些不穩定，請靜心後再試一次。\n\n詳細錯誤訊息：\n" + error.message;
+                poemTextP.textContent = "心誠\n則靈";
                 resultCard.classList.remove('hidden');
-                detailedSection.classList.add('hidden'); // 保持隱藏詳解區
+                detailedSection.classList.add('hidden');
             } finally {
                 loadingIndicator.classList.add('hidden');
                 drawButton.disabled = false;
@@ -125,7 +120,6 @@
             }
         }
         
-        // 新增：處理詳解籤詩的函式
         async function handleDetailedInterpretation() {
             const userQuery = userQueryInput.value.trim();
             if (!userQuery) {
@@ -143,16 +137,12 @@
             try {
                 const response = await fetch('/.netlify/functions/get-detailed-interpretation', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        lotNumber,
-                        poemText,
-                        userQuery
-                    }),
+                    body: JSON.stringify({ lotNumber, poemText, userQuery }),
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `伺服器錯誤，狀態碼: ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`伺服器回應錯誤: ${response.status} - ${errorText}`);
                 }
 
                 const result = await response.json();
@@ -160,6 +150,7 @@
                 detailedResult.classList.remove('hidden');
 
             } catch (error) {
+                console.error("詳解時發生錯誤:", error);
                 detailedInterpretationText.textContent = "解讀時遇到阻礙，請稍後再試。\n錯誤: " + error.message;
                 detailedResult.classList.remove('hidden');
             } finally {

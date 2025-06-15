@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>觀音靈籤解惑</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Serif TC', serif; }
+        .lotus-bg { background-image: url('https://images.unsplash.com/photo-1547895345-2965ab1a2b53?q=80&w=2070&auto=format&fit=crop'); background-size: cover; background-position: center; }
+        .card-bg { background-color: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        .btn-draw { background: linear-gradient(145deg, #c33764, #1d2671); transition: all 0.3s ease-in-out; box-shadow: 0 4px 15px 0 rgba(195, 55, 100, 0.75); }
+        .btn-draw:hover { transform: translateY(-2px); box-shadow: 0 6px 20px 0 rgba(29, 38, 113, 0.5); }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #c33764; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .poem-text { writing-mode: vertical-rl; text-orientation: mixed; white-space: pre; line-height: 2.5; letter-spacing: 0.1em; }
+    </style>
+</head>
+<body class="lotus-bg">
+    <div class="flex items-center justify-center min-h-screen bg-black bg-opacity-20 p-4">
+        <div id="app" class="w-full max-w-2xl mx-auto card-bg rounded-2xl shadow-2xl p-6 md:p-10 text-center text-gray-800">
+            <header class="mb-6">
+                <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">觀音靈籤解惑</h1>
+                <p class="mt-2 text-lg text-gray-600">靜心默念所問之事，祈求菩薩賜與指引</p>
+            </header>
+            <main>
+                <div id="draw-section"><button id="drawButton" class="btn-draw text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg focus:outline-none focus:ring-4 focus:ring-pink-300">祈求靈籤</button></div>
+                <div id="loadingIndicator" class="hidden my-8 flex flex-col items-center justify-center"><div class="loader"></div><p class="mt-4 text-gray-600">正在與觀音菩薩溝通，請稍候...</p></div>
+                <div id="resultCard" class="hidden mt-6 p-6 border-2 border-red-200 rounded-lg bg-white/50">
+                    <div class="text-2xl font-bold mb-4 text-red-800">您抽到了 第 <span id="lotNumber"></span> 號籤</div>
+                    <div class="flex flex-col md:flex-row justify-center items-start gap-8">
+                        <div class="poem-container border-r-2 border-gray-300 pr-8"><h3 class="text-xl font-semibold mb-4 text-center md:text-right" style="writing-mode: vertical-rl; text-orientation: mixed;">籤詩</h3><p id="poemText" class="poem-text text-2xl h-80"></p></div>
+                        <div class="interpretation-container text-left flex-1"><h3 class="text-xl font-semibold mb-4 border-b pb-2">菩薩解曰</h3><p id="interpretationText" class="text-lg leading-relaxed whitespace-pre-wrap"></p></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script type="module">
+        const drawButton = document.getElementById('drawButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const resultCard = document.getElementById('resultCard');
+        const lotNumberSpan = document.getElementById('lotNumber');
+        const poemTextP = document.getElementById('poemText');
+        const interpretationTextP = document.getElementById('interpretationText');
+        drawButton.addEventListener('click', handleDraw);
+        async function handleDraw() {
+            drawButton.disabled = true;
+            drawButton.textContent = '誠心祈求中...';
+            resultCard.classList.add('hidden');
+            loadingIndicator.classList.remove('hidden');
+            const lotNumber = Math.floor(Math.random() * 100) + 1;
+            try {
+                const aiResponse = await generateAIPoem(lotNumber);
+                const { poem, interpretation } = parseResponse(aiResponse);
+                lotNumberSpan.textContent = lotNumber;
+                poemTextP.textContent = poem;
+                interpretationTextP.textContent = interpretation;
+                resultCard.classList.remove('hidden');
+            } catch (error) {
+                console.error("解籤時發生錯誤:", error);
+                interpretationTextP.textContent = "與菩薩的連結似乎有些不穩定，請靜心後再試一次。\n錯誤訊息：" + error.message;
+                poemTextP.textContent = "心誠則靈";
+                lotNumberSpan.textContent = '??';
+                resultCard.classList.remove('hidden');
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                drawButton.disabled = false;
+                drawButton.textContent = '再次祈求';
+            }
+        }
+        function parseResponse(text) {
+            let poem = "天意難測";
+            let interpretation = "請稍後再試";
+            try {
+                const poemMatch = text.match(/籤詩：([\s\S]*?)解曰：/);
+                const interpretationMatch = text.match(/解曰：([\s\S]*)/);
+                if (poemMatch && poemMatch[1]) poem = poemMatch[1].trim();
+                if (interpretationMatch && interpretationMatch[1]) interpretation = interpretationMatch[1].trim();
+            } catch(e) {
+                console.error("解析 AI 回應失敗:", e);
+                interpretation = text;
+            }
+            return { poem, interpretation };
+        }
+        async function generateAIPoem(number) {
+            const functionUrl = '/.netlify/functions/generate-poem';
+            const response = await fetch(functionUrl, {
+                method: 'POST',
+                body: JSON.stringify({ lotNumber: number }), 
+            });
+            if (!response.ok) { throw new Error(`呼叫後端失敗，狀態碼: ${response.status}`); }
+            const result = await response.json();
+            if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                console.error("從後端收到無效的回應", result);
+                throw new Error("後端未能提供有效的籤詩內容。");
+            }
+        }
+    </script>
+</body>
+</html>
+<!-- v2 -->
+
